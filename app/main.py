@@ -155,8 +155,12 @@ def render_tab(file_path, view_mode, unit):
                     xaxis=dict(type='date', tickformat="%m-%d %H:%M", nticks=10),
                     legend=dict(title=None, orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
+                x_min = plot_df['수집시각'].min()
+                x_max = plot_df['수집시각'].max()
                 if show_events:
                     add_event_lines(fig)
+                # vline이 x축 범위를 확장하지 못하도록 데이터 범위로 고정
+                fig.update_layout(xaxis_range=[x_min, x_max])
                 st.plotly_chart(fig, use_container_width=True)
 
 
