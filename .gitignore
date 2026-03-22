@@ -1,5 +1,19 @@
+# 인증 및 설정
 config/
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# Python
 .venv/
 __pycache__/
+*.pyc
+
+# 데이터
 data/raw/*.csv
-.env
+
+# 기타
+.DS_Store
+*.log

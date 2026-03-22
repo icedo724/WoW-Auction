@@ -11,22 +11,28 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: 'pip'
+
       - name: Install dependencies
         run: pip install requests pandas
+
       - name: Run Collection Script
         env:
           WOW_CLIENT_ID: ${{ secrets.WOW_CLIENT_ID }}
           WOW_CLIENT_SECRET: ${{ secrets.WOW_CLIENT_SECRET }}
         run: python scripts/collector.py
+
       - name: Commit and Push changes
         run: |
           git config --global user.name "Market-Bot"
           git config --global user.email "bot@github.com"
           git add data/market_history.csv data/market_volume.csv data/item_dict.csv
-          git commit -m "Update market price and volume" || exit 0
+          TIMESTAMP=$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M KST')
+          git commit -m "Update market data [$TIMESTAMP]" || exit 0
           git push
