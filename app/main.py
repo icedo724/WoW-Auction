@@ -164,13 +164,57 @@ def render_tab(file_path, view_mode, unit):
                 st.plotly_chart(fig, use_container_width=True)
 
 
+def render_patch_analysis(df_long):
+    # 이벤트 및 비교 구간 선택
+    event_labels = [e["label"] for e in EXPANSION_EVENTS]
+    selected_label = st.radio("패치 이벤트", event_labels, horizontal=True, key="patch_event")
+    event_date = pd.Timestamp(next(e["date"] for e in EXPANSION_EVENTS if e["label"] == selected_label))
+
+    window_hours = {"24시간": 24, "48시간": 48, "7일": 168}[
+        st.radio("비교 구간", ["24시간", "48시간", "7일"], horizontal=True, key="patch_window")
+    ]
+
+    before_avg = df_long[
+        (df_long['수집시각'] >= event_date - pd.Timedelta(hours=window_hours)) &
+        (df_long['수집시각'] <  event_date)
+    ].groupby('품목명')['value'].mean()
+
+    after_avg = df_long[
+        (df_long['수집시각'] >= event_date) &
+        (df_long['수집시각'] <  event_date + pd.Timedelta(hours=window_hours))
+    ].groupby('품목명')['value'].mean()
+
+    result = pd.DataFrame({'패치 전 평균 (G)': before_avg, '패치 후 평균 (G)': after_avg}).dropna()
+    result['변화율 (%)'] = (
+        (result['패치 후 평균 (G)'] - result['패치 전 평균 (G)']) / result['패치 전 평균 (G)'] * 100
+    ).round(2)
+    result = result.sort_values('변화율 (%)')
+
+    fmt = {'패치 전 평균 (G)': '{:,.1f}', '패치 후 평균 (G)': '{:,.1f}', '변화율 (%)': '{:+.2f}%'}
+
+    if result.empty:
+        st.warning("해당 구간에 데이터가 없습니다.")
+        return
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"**📉 급락 TOP 10** — {selected_label} 전후 {window_hours}시간")
+        st.dataframe(result.head(10).style.format(fmt), use_container_width=True)
+    with col2:
+        st.markdown(f"**📈 급등 TOP 10** — {selected_label} 전후 {window_hours}시간")
+        st.dataframe(result.tail(10).iloc[::-1].style.format(fmt), use_container_width=True)
+
+    with st.expander("📋 전체 품목 변화율"):
+        st.dataframe(result.style.format(fmt), use_container_width=True)
+
+
 # ── 메인 ────────────────────────────────────────────────────────────────────
 
 if not os.path.exists(HISTORY_FILE):
     st.error("데이터 파일이 없습니다.")
     st.stop()
 
-df_price, _ = load_data(HISTORY_FILE)
+df_price, df_price_long = load_data(HISTORY_FILE)
 latest_col   = df_price.columns[-1]
 token_price  = df_price.loc['WoW 토큰', latest_col] if 'WoW 토큰' in df_price.index else 0
 
@@ -198,7 +242,7 @@ with col3:
 st.divider()
 
 # 탭 전환
-tab_price, tab_volume = st.tabs(["📊 시세", "📦 등록량"])
+tab_price, tab_volume, tab_patch = st.tabs(["📊 시세", "📦 등록량", "🔍 패치 분석"])
 
 with tab_price:
     render_tab(HISTORY_FILE, "시세", "Gold")
@@ -208,6 +252,9 @@ with tab_volume:
         render_tab(VOLUME_FILE, "등록량", "개")
     else:
         st.error("등록량 데이터 파일이 없습니다.")
+
+with tab_patch:
+    render_patch_analysis(df_price_long)
 
 st.divider()
 render_patch_log()
