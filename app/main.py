@@ -112,6 +112,9 @@ def render_tab(file_path, view_mode, unit):
         else:
             df_period = df_long
 
+        # 이벤트 로그 표시 토글
+        show_events = st.checkbox("이벤트 로그 표시", value=True, key=f"events_{view_mode}")
+
         # 품목 선택
         selected_items = st.multiselect(
             "분석 품목",
@@ -150,7 +153,8 @@ def render_tab(file_path, view_mode, unit):
                     xaxis=dict(type='date', tickformat="%m-%d %H:%M", nticks=10),
                     legend=dict(title=None, orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
-                add_event_lines(fig)
+                if show_events:
+                    add_event_lines(fig)
                 st.plotly_chart(fig, use_container_width=True)
 
 
