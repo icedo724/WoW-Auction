@@ -36,7 +36,8 @@ def get_token():
     r = requests.post(
         "https://oauth.battle.net/token",
         data={'grant_type': 'client_credentials'},
-        auth=(client_id, client_secret)
+        auth=(client_id, client_secret),
+        timeout=10
     )
     r.raise_for_status()
 
@@ -51,7 +52,7 @@ def get_wow_token_price(token):
     url = "https://kr.api.blizzard.com/data/wow/token/index"
     headers = {"Authorization": f"Bearer {token}", "Battlenet-Namespace": "dynamic-kr"}
     try:
-        r = requests.get(url, headers=headers)
+        r = requests.get(url, headers=headers, timeout=10)
         r.raise_for_status()
         return r.json()['price'] / 10000
     except Exception as e:
@@ -64,7 +65,7 @@ def get_item_name(item_id, token):
     url = f"https://kr.api.blizzard.com/data/wow/item/{item_id}"
     headers = {"Authorization": f"Bearer {token}", "Battlenet-Namespace": "static-kr", "locale": "ko_KR"}
     try:
-        r = requests.get(url, headers=headers)
+        r = requests.get(url, headers=headers, timeout=10)
         r.raise_for_status()
         name = r.json().get('name')
         return name.get('ko_KR') if isinstance(name, dict) else str(name)
@@ -95,7 +96,7 @@ def collect_master():
     # 경매장 commodity 데이터 조회 (서버 전체 통합 시세)
     url = "https://kr.api.blizzard.com/data/wow/auctions/commodities"
     headers = {"Authorization": f"Bearer {token}", "Battlenet-Namespace": "dynamic-kr"}
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=30)
 
     if response.status_code != 200:
         logger.error(f"경매장 API 실패: HTTP {response.status_code} / {response.text[:200]}")

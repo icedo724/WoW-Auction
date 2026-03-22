@@ -19,34 +19,46 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HISTORY_FILE = os.path.join(BASE_DIR, 'data', 'market_history.csv')
-VOLUME_FILE  = os.path.join(BASE_DIR, 'data', 'market_volume.csv')
+BASE_DIR       = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HISTORY_FILE   = os.path.join(BASE_DIR, 'data', 'market_history.csv')
+VOLUME_FILE    = os.path.join(BASE_DIR, 'data', 'market_volume.csv')
+PATCH_LOG_FILE = os.path.join(BASE_DIR, 'data', 'patch_log.csv')
 
 # 블리자드 한국 배틀넷 스토어 기준 WoW 토큰 원화 판매 가격
 WOW_TOKEN_KRW = 22_000
 
-# 한밤(Midnight) 확장팩 주요 타임라인
+# 한밤(Midnight) 확장팩 주요 타임라인 (차트 수직선)
 EXPANSION_EVENTS = [
-    {"date": "2026-02-27", "label": "한밤 얼리 액세스", "color": "#F4A522", "dash": "dash"},
-    {"date": "2026-03-02", "label": "한밤 정식 출시",   "color": "#E63946", "dash": "solid"},
+    {"date": "2026-03-03", "label": "한밤 정식 출시",        "color": "#E63946", "dash": "solid"},
+    {"date": "2026-03-19", "label": "시즌 1 · 루야살 오픈", "color": "#4C9BE8", "dash": "dot"},
 ]
 
-# 기간 필터 옵션 (label → 시간 수)
-PERIODS = {"24시간": 24, "7일": 168, "전체": None}
+CATEGORY_COLOR = {
+    "출시":   "#E63946",
+    "레이드": "#4C9BE8",
+    "핫픽스": "#888888",
+    "밸런스": "#F4A522",
+}
+
+PERIODS = {"24시간": 24, "3일": 72, "7일": 168, "전체": None}
 
 
 @st.cache_data(ttl=3600)
-def load_csv(file_path):
-    return pd.read_csv(file_path, index_col=0)
-
-
-def to_long(df_wide):
-    # wide format → long format 변환
+def load_data(file_path):
+    # wide/long 동시 변환 후 캐시
+    df_wide = pd.read_csv(file_path, index_col=0)
+    df_wide.index.name = None
     df_long = df_wide.reset_index().melt(id_vars='index', var_name='수집시각', value_name='value')
     df_long.rename(columns={'index': '품목명'}, inplace=True)
     df_long['수집시각'] = pd.to_datetime(df_long['수집시각'])
-    return df_long
+    return df_wide, df_long
+
+
+@st.cache_data(ttl=3600)
+def load_patch_log():
+    df = pd.read_csv(PATCH_LOG_FILE)
+    df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+    return df
 
 
 def add_event_lines(fig):
@@ -64,8 +76,24 @@ def add_event_lines(fig):
         )
 
 
-def render_tab(df_wide, view_mode, unit):
-    df_long = to_long(df_wide)
+def render_patch_log():
+    if not os.path.exists(PATCH_LOG_FILE):
+        return
+    df = load_patch_log()
+    with st.expander("📅 한밤(Midnight) 패치 로그", expanded=True):
+        for _, row in df.iterrows():
+            color = CATEGORY_COLOR.get(row['category'], "#888888")
+            st.markdown(
+                f"`{row['date']}`　"
+                f"<span style='background:{color};color:#fff;padding:2px 8px;"
+                f"border-radius:4px;font-size:0.75rem'>{row['category']}</span>　"
+                f"{row['title']}",
+                unsafe_allow_html=True
+            )
+
+
+def render_tab(file_path, view_mode, unit):
+    df_wide, df_long = load_data(file_path)
     latest_col = df_wide.columns[-1]
 
     left, right = st.columns([1, 2.5])
@@ -96,7 +124,7 @@ def render_tab(df_wide, view_mode, unit):
         st.write(f"📋 **현재 {view_mode} ({unit})**")
         display_df = df_wide[[latest_col]].sort_values(by=latest_col, ascending=False)
         display_df.columns = [view_mode]
-        st.dataframe(display_df, use_container_width=True)
+        st.dataframe(display_df, use_container_width=True, height=300)
 
     with right:
         st.subheader(f"📈 {view_mode} 변화 흐름 — {period_label}")
@@ -108,7 +136,7 @@ def render_tab(df_wide, view_mode, unit):
             if plot_df.empty:
                 st.warning("선택한 기간에 데이터가 없습니다.")
             else:
-                # 데이터 포인트가 많으면 마커 숨김 (72개 = 3일치 기준)
+                # 3일(72 시점) 초과 시 마커 숨김
                 show_markers = plot_df['수집시각'].nunique() <= 72
 
                 fig = px.line(
@@ -118,6 +146,7 @@ def render_tab(df_wide, view_mode, unit):
                 )
                 fig.update_layout(
                     template="plotly_white", hovermode="x unified",
+                    height=450,
                     xaxis=dict(type='date', tickformat="%m-%d %H:%M", nticks=10),
                     legend=dict(title=None, orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
@@ -131,18 +160,16 @@ if not os.path.exists(HISTORY_FILE):
     st.error("데이터 파일이 없습니다.")
     st.stop()
 
-df_price  = load_csv(HISTORY_FILE)
-df_volume = load_csv(VOLUME_FILE) if os.path.exists(VOLUME_FILE) else None
+df_price, _ = load_data(HISTORY_FILE)
+latest_col   = df_price.columns[-1]
+token_price  = df_price.loc['WoW 토큰', latest_col] if 'WoW 토큰' in df_price.index else 0
 
-latest_col = df_price.columns[-1]
-token_price = df_price.loc['WoW 토큰', latest_col] if 'WoW 토큰' in df_price.index else 0
-
-# 전 시간 대비 토큰 시세 변화
+# 전 시간 대비 토큰 시세 변화 (NaN 방어)
+token_delta = None
 if 'WoW 토큰' in df_price.index and len(df_price.columns) >= 2:
-    token_prev  = df_price.loc['WoW 토큰', df_price.columns[-2]]
-    token_delta = token_price - token_prev
-else:
-    token_delta = None
+    token_prev = df_price.loc['WoW 토큰', df_price.columns[-2]]
+    if pd.notna(token_prev) and pd.notna(token_price):
+        token_delta = token_price - token_prev
 
 # 타이틀 + 마지막 업데이트
 st.title("월드 오브 워크래프트 경제 지표")
@@ -164,10 +191,13 @@ st.divider()
 tab_price, tab_volume = st.tabs(["📊 시세", "📦 등록량"])
 
 with tab_price:
-    render_tab(df_price, "시세", "Gold")
+    render_tab(HISTORY_FILE, "시세", "Gold")
 
 with tab_volume:
-    if df_volume is not None:
-        render_tab(df_volume, "등록량", "개")
+    if os.path.exists(VOLUME_FILE):
+        render_tab(VOLUME_FILE, "등록량", "개")
     else:
         st.error("등록량 데이터 파일이 없습니다.")
+
+st.divider()
+render_patch_log()
