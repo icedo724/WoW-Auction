@@ -5,6 +5,7 @@ config/
 # IDE
 .idea/
 .vscode/
+.claude/
 
 # Python
 .venv/
@@ -17,3 +18,4 @@ data/raw/*.csv
 # 기타
 .DS_Store
 *.log
+README.md

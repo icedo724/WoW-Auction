@@ -7,7 +7,8 @@
       "WebSearch",
       "Read(//c/Users/icedo/.claude/projects/c--Users-icedo-Desktop-1-----loabal/memory/**)",
       "Read(//c/Users/icedo/Desktop/1/포폴용/**)",
-      "Bash(wc -l \"C:/Users/icedo/Desktop/1/포폴용/lostark/data\"/*.csv)"
+      "Bash(wc -l \"C:/Users/icedo/Desktop/1/포폴용/lostark/data\"/*.csv)",
+      "WebFetch(domain:news.blizzard.com)"
     ]
   }
 }
