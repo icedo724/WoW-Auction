@@ -188,11 +188,12 @@ def render_market_discovery(df_wide, df_long, df_vol_wide, item_class_map):
         st.markdown("**평균 시세 상위 품목** — 경제적 가치가 높은 아이템")
         st.caption("시세가 높다 = 수요 대비 공급이 적은 희소 재료일 가능성")
         stats_a = pd.DataFrame({
-            '분류':          mean_price.index.map(item_class_map) if item_class_map else '',
             '평균 시세 (G)': mean_price.round(1),
             '최고가 (G)':    df_wide.max(axis=1).round(1),
             '최저가 (G)':    df_wide.min(axis=1).round(1),
         }).sort_values('평균 시세 (G)', ascending=False).head(20)
+        if item_class_map:
+            stats_a.insert(0, '분류', stats_a.index.map(item_class_map))
         st.dataframe(stats_a.style.format({c: '{:,.1f}' for c in stats_a.columns if c != '분류'}),
                      use_container_width=True, height=420)
 
@@ -205,11 +206,12 @@ def render_market_discovery(df_wide, df_long, df_vol_wide, item_class_map):
             vol_mean = df_vol_wide.mean(axis=1)
             vol_cv   = (df_vol_wide.std(axis=1) / vol_mean).replace([float('inf'), -float('inf')], pd.NA)
             stats_b = pd.DataFrame({
-                '분류':            vol_mean.index.map(item_class_map) if item_class_map else '',
                 '평균 등록량':     vol_mean.round(0),
                 '등록량 변동계수': vol_cv.round(3),
                 '최대 등록량':     df_vol_wide.max(axis=1).round(0),
             }).sort_values('평균 등록량', ascending=False).head(20)
+            if item_class_map:
+                stats_b.insert(0, '분류', stats_b.index.map(item_class_map))
             fmt_b = {'평균 등록량': '{:,.0f}', '등록량 변동계수': '{:.3f}', '최대 등록량': '{:,.0f}'}
             st.dataframe(stats_b.style.format(fmt_b), use_container_width=True, height=420)
 
@@ -217,11 +219,12 @@ def render_market_discovery(df_wide, df_long, df_vol_wide, item_class_map):
         st.markdown("**가격 변동계수 상위 품목** — 시장 충격에 민감하게 반응하는 아이템")
         st.caption("변동계수(CV) = 표준편차 / 평균. 높을수록 패치·이벤트의 영향을 크게 받음")
         stats_c = pd.DataFrame({
-            '분류':          cv.index.map(item_class_map) if item_class_map else '',
             '변동계수 (CV)': cv.round(3),
             '평균 시세 (G)': mean_price.round(1),
             '표준편차 (G)': std_price.round(1),
         }).sort_values('변동계수 (CV)', ascending=False).head(20)
+        if item_class_map:
+            stats_c.insert(0, '분류', stats_c.index.map(item_class_map))
         fmt_c = {'변동계수 (CV)': '{:.3f}', '평균 시세 (G)': '{:,.1f}', '표준편차 (G)': '{:,.1f}'}
         st.dataframe(stats_c.style.format(fmt_c), use_container_width=True, height=420)
 
