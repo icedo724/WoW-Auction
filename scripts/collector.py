@@ -60,18 +60,22 @@ def get_wow_token_price(token):
         return None
 
 
-def get_item_name(item_id, token):
-    # 아이템 한국어 이름 조회
+def get_item_info(item_id, token):
+    # 아이템 한국어 이름 및 대분류(item_class) 조회
     url = f"https://kr.api.blizzard.com/data/wow/item/{item_id}"
     headers = {"Authorization": f"Bearer {token}", "Battlenet-Namespace": "static-kr", "locale": "ko_KR"}
     try:
         r = requests.get(url, headers=headers, timeout=10)
         r.raise_for_status()
-        name = r.json().get('name')
-        return name.get('ko_KR') if isinstance(name, dict) else str(name)
+        data = r.json()
+        name = data.get('name')
+        name = name.get('ko_KR') if isinstance(name, dict) else str(name)
+        cls = data.get('item_class', {}).get('name', '')
+        item_class = cls.get('ko_KR') if isinstance(cls, dict) else str(cls)
+        return name, item_class
     except Exception as e:
-        logger.warning(f"아이템명 조회 실패 (id={item_id}): {e}")
-        return f"ID_{item_id}"
+        logger.warning(f"아이템 정보 조회 실패 (id={item_id}): {e}")
+        return f"ID_{item_id}", ''
 
 
 def update_csv(file_name, item_dict, value_dict, now_col):
@@ -120,19 +124,32 @@ def collect_master():
     top_20_ids = df_raw.groupby('item_id')['quantity'].sum().nlargest(20).index.tolist()
 
     dict_path = os.path.join(BASE_DIR, 'data', 'item_dict.csv')
-    item_dict = (
-        pd.read_csv(dict_path, index_col='item_id')['item_name'].to_dict()
-        if os.path.exists(dict_path)
-        else STABLE_TARGETS.copy()
-    )
+    if os.path.exists(dict_path):
+        df_dict = pd.read_csv(dict_path, index_col='item_id')
+        item_dict       = df_dict['item_name'].to_dict()
+        item_class_dict = df_dict['item_class'].to_dict() if 'item_class' in df_dict.columns else {}
+    else:
+        item_dict       = STABLE_TARGETS.copy()
+        item_class_dict = {}
 
+    # 신규 아이템 추가
     for iid in top_20_ids:
         if iid not in item_dict:
-            item_dict[iid] = get_item_name(iid, token)
+            name, item_class = get_item_info(iid, token)
+            item_dict[iid]       = name
+            item_class_dict[iid] = item_class
 
-    pd.DataFrame(list(item_dict.items()), columns=['item_id', 'item_name']).to_csv(
-        dict_path, index=False, encoding='utf-8-sig'
-    )
+    # item_class 누락 아이템 백필 (컬럼 신규 추가 시 1회 실행)
+    for iid in item_dict:
+        if iid not in item_class_dict:
+            _, item_class = get_item_info(iid, token)
+            item_class_dict[iid] = item_class
+
+    pd.DataFrame({
+        'item_id':    list(item_dict.keys()),
+        'item_name':  list(item_dict.values()),
+        'item_class': [item_class_dict.get(iid, '') for iid in item_dict],
+    }).to_csv(dict_path, index=False, encoding='utf-8-sig')
 
     # unit_price 단위: copper (1G = 10,000 copper) → Gold 변환
     # quantity: 경매장 현재 등록 수량 (거래 완료량 아님, 공급량 지표)

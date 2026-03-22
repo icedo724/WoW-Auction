@@ -22,7 +22,8 @@ st.markdown("""
 BASE_DIR       = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HISTORY_FILE   = os.path.join(BASE_DIR, 'data', 'market_history.csv')
 VOLUME_FILE    = os.path.join(BASE_DIR, 'data', 'market_volume.csv')
-PATCH_LOG_FILE = os.path.join(BASE_DIR, 'data', 'patch_log.csv')
+PATCH_LOG_FILE  = os.path.join(BASE_DIR, 'data', 'patch_log.csv')
+ITEM_DICT_FILE  = os.path.join(BASE_DIR, 'data', 'item_dict.csv')
 
 # 블리자드 한국 배틀넷 스토어 기준 WoW 토큰 원화 판매 가격
 WOW_TOKEN_KRW = 22_000
@@ -52,6 +53,17 @@ def load_data(file_path):
     df_long.rename(columns={'index': '품목명'}, inplace=True)
     df_long['수집시각'] = pd.to_datetime(df_long['수집시각'])
     return df_wide, df_long
+
+
+@st.cache_data(ttl=3600)
+def load_item_dict():
+    # item_id → {name, item_class} 매핑 로드
+    if not os.path.exists(ITEM_DICT_FILE):
+        return {}
+    df = pd.read_csv(ITEM_DICT_FILE)
+    if 'item_class' not in df.columns:
+        return {}
+    return df.set_index('item_name')['item_class'].to_dict()
 
 
 @st.cache_data(ttl=3600)
@@ -149,8 +161,22 @@ def render_price_tab(df_wide, df_long):
                 st.plotly_chart(fig, use_container_width=True)
 
 
-def render_market_discovery(df_wide, df_long, df_vol_wide):
+def render_market_discovery(df_wide, df_long, df_vol_wide, item_class_map):
     st.caption("게임을 몰라도 — 데이터가 스스로 가리키는 주요 아이템")
+
+    # 분류 필터
+    if item_class_map:
+        all_classes = sorted({v for v in item_class_map.values() if v})
+        selected_classes = st.multiselect(
+            "아이템 분류 필터", all_classes, placeholder="전체 (선택 없음 = 전체 표시)",
+            key="class_filter"
+        )
+        if selected_classes:
+            filtered_items = [n for n, c in item_class_map.items() if c in selected_classes]
+            df_wide  = df_wide[df_wide.index.isin(filtered_items)]
+            df_long  = df_long[df_long['품목명'].isin(filtered_items)]
+            if df_vol_wide is not None:
+                df_vol_wide = df_vol_wide[df_vol_wide.index.isin(filtered_items)]
 
     mean_price = df_wide.mean(axis=1)
     std_price  = df_wide.std(axis=1)
@@ -162,11 +188,13 @@ def render_market_discovery(df_wide, df_long, df_vol_wide):
         st.markdown("**평균 시세 상위 품목** — 경제적 가치가 높은 아이템")
         st.caption("시세가 높다 = 수요 대비 공급이 적은 희소 재료일 가능성")
         stats_a = pd.DataFrame({
+            '분류':          mean_price.index.map(item_class_map) if item_class_map else '',
             '평균 시세 (G)': mean_price.round(1),
             '최고가 (G)':    df_wide.max(axis=1).round(1),
             '최저가 (G)':    df_wide.min(axis=1).round(1),
         }).sort_values('평균 시세 (G)', ascending=False).head(20)
-        st.dataframe(stats_a.style.format('{:,.1f}'), use_container_width=True, height=420)
+        st.dataframe(stats_a.style.format({c: '{:,.1f}' for c in stats_a.columns if c != '분류'}),
+                     use_container_width=True, height=420)
 
     with tab_b:
         if df_vol_wide is None:
@@ -177,6 +205,7 @@ def render_market_discovery(df_wide, df_long, df_vol_wide):
             vol_mean = df_vol_wide.mean(axis=1)
             vol_cv   = (df_vol_wide.std(axis=1) / vol_mean).replace([float('inf'), -float('inf')], pd.NA)
             stats_b = pd.DataFrame({
+                '분류':            vol_mean.index.map(item_class_map) if item_class_map else '',
                 '평균 등록량':     vol_mean.round(0),
                 '등록량 변동계수': vol_cv.round(3),
                 '최대 등록량':     df_vol_wide.max(axis=1).round(0),
@@ -188,6 +217,7 @@ def render_market_discovery(df_wide, df_long, df_vol_wide):
         st.markdown("**가격 변동계수 상위 품목** — 시장 충격에 민감하게 반응하는 아이템")
         st.caption("변동계수(CV) = 표준편차 / 평균. 높을수록 패치·이벤트의 영향을 크게 받음")
         stats_c = pd.DataFrame({
+            '분류':          cv.index.map(item_class_map) if item_class_map else '',
             '변동계수 (CV)': cv.round(3),
             '평균 시세 (G)': mean_price.round(1),
             '표준편차 (G)': std_price.round(1),
@@ -286,7 +316,8 @@ if not os.path.exists(HISTORY_FILE):
     st.stop()
 
 df_price, df_price_long = load_data(HISTORY_FILE)
-df_vol_wide = load_data(VOLUME_FILE)[0] if os.path.exists(VOLUME_FILE) else None
+df_vol_wide   = load_data(VOLUME_FILE)[0] if os.path.exists(VOLUME_FILE) else None
+item_class_map = load_item_dict()
 
 latest_col  = df_price.columns[-1]
 token_price = df_price.loc['WoW 토큰', latest_col] if 'WoW 토큰' in df_price.index else 0
@@ -318,7 +349,7 @@ with tab_price:
     render_price_tab(df_price, df_price_long)
 
 with tab_discovery:
-    render_market_discovery(df_price, df_price_long, df_vol_wide)
+    render_market_discovery(df_price, df_price_long, df_vol_wide, item_class_map)
 
 with tab_patch:
     render_patch_analysis(df_price_long)
