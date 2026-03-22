@@ -18,4 +18,4 @@ data/raw/*.csv
 # 기타
 .DS_Store
 *.log
-README.md
+report_draft.md

@@ -31,7 +31,7 @@ WOW_TOKEN_KRW = 22_000
 # 한밤(Midnight) 확장팩 주요 타임라인 (차트 수직선)
 EXPANSION_EVENTS = [
     {"date": "2026-03-03", "label": "한밤 정식 출시",        "color": "#E63946", "dash": "solid"},
-    {"date": "2026-03-19", "label": "시즌 1 · 루야살 오픈", "color": "#4C9BE8", "dash": "dot"},
+    {"date": "2026-03-19", "label": "시즌 1 오픈 (공허첨탑·꿈의 균열)", "color": "#4C9BE8", "dash": "dot"},
 ]
 
 CATEGORY_COLOR = {
@@ -310,6 +310,17 @@ def render_patch_analysis(df_long):
 
     with st.expander("📋 전체 품목 변화율"):
         st.dataframe(result.style.format(fmt), use_container_width=True)
+
+    # 품목 검색
+    st.divider()
+    st.markdown("**🔎 품목 검색**")
+    keyword = st.text_input("품목명 검색", placeholder="예: 빛의 잠재력", key="patch_search")
+    if keyword:
+        matched = result[result.index.str.contains(keyword, case=False, na=False)]
+        if matched.empty:
+            st.warning("검색 결과가 없습니다.")
+        else:
+            st.dataframe(matched.style.format(fmt), use_container_width=True)
 
 
 # ── 메인 ────────────────────────────────────────────────────────────────────
