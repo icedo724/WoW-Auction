@@ -63,9 +63,11 @@ def load_patch_log():
 
 def add_event_lines(fig):
     # 확장팩 타임라인 수직선 마킹
+    # Plotly 신버전은 날짜 문자열 대신 밀리초 타임스탬프 필요
     for event in EXPANSION_EVENTS:
+        x_ms = pd.Timestamp(event["date"]).value // 10 ** 6
         fig.add_vline(
-            x=event["date"],
+            x=x_ms,
             line_dash=event["dash"],
             line_color=event["color"],
             line_width=2,
