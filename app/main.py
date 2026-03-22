@@ -174,26 +174,47 @@ def render_patch_analysis(df_long):
         st.radio("비교 구간", ["24시간", "48시간", "7일"], horizontal=True, key="patch_window")
     ]
 
-    before_avg = df_long[
+    before_df = df_long[
         (df_long['수집시각'] >= event_date - pd.Timedelta(hours=window_hours)) &
         (df_long['수집시각'] <  event_date)
-    ].groupby('품목명')['value'].mean()
+    ].dropna(subset=['value'])
 
-    after_avg = df_long[
+    after_df = df_long[
         (df_long['수집시각'] >= event_date) &
         (df_long['수집시각'] <  event_date + pd.Timedelta(hours=window_hours))
-    ].groupby('품목명')['value'].mean()
+    ].dropna(subset=['value'])
 
-    result = pd.DataFrame({'패치 전 평균 (G)': before_avg, '패치 후 평균 (G)': after_avg}).dropna()
+    before_avg   = before_df.groupby('품목명')['value'].mean()
+    before_count = before_df.groupby('품목명')['value'].count()
+    after_avg    = after_df.groupby('품목명')['value'].mean()
+
+    result = pd.DataFrame({
+        '패치 전 평균 (G)': before_avg,
+        '패치 후 평균 (G)': after_avg,
+        '패치 전 데이터 수': before_count,
+    }).dropna()
+
     result['변화율 (%)'] = (
         (result['패치 후 평균 (G)'] - result['패치 전 평균 (G)']) / result['패치 전 평균 (G)'] * 100
     ).round(2)
-    result = result.sort_values('변화율 (%)')
 
-    fmt = {'패치 전 평균 (G)': '{:,.1f}', '패치 후 평균 (G)': '{:,.1f}', '변화율 (%)': '{:+.2f}%'}
+    # 신뢰도 필터: 패치 전 데이터가 부족한 아이템(신규 아이템 등) 제거
+    min_count = st.slider(
+        "패치 전 최소 데이터 수 (낮을수록 신규 아이템 포함)",
+        min_value=1, max_value=int(window_hours), value=max(1, window_hours // 4),
+        help="패치 전 수집된 데이터 포인트가 이 값 미만인 품목은 결과에서 제외됩니다."
+    )
+    result = result[result['패치 전 데이터 수'] >= min_count].sort_values('변화율 (%)')
+
+    fmt = {
+        '패치 전 평균 (G)': '{:,.1f}',
+        '패치 후 평균 (G)': '{:,.1f}',
+        '패치 전 데이터 수': '{:.0f}',
+        '변화율 (%)': '{:+.2f}%',
+    }
 
     if result.empty:
-        st.warning("해당 구간에 데이터가 없습니다.")
+        st.warning("조건을 만족하는 품목이 없습니다. 최소 데이터 수를 낮춰보세요.")
         return
 
     col1, col2 = st.columns(2)
