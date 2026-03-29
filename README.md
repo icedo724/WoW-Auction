@@ -25,3 +25,6 @@
 - 이벤트 전후 48시간 가격 변화율 분석
 - 급락·급등 상위 10개 품목 표시
 - 품목명 키워드 검색
+
+## 분석 리포트
+[Notion](https://www.notion.so/miniminimin/32bfbcdaed288053bcfef33ce58e2d14?source=copy_link)
