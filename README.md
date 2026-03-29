@@ -1,6 +1,6 @@
 # WoW 경매장 경제 지표 대시보드
 
-**대시보드 바로가기:** https://wowauction.streamlit.app/
+**[대시보드](https://wowauction.streamlit.app/)**
 
 ## 데이터 수집
 
