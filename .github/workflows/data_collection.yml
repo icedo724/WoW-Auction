@@ -1,8 +1,9 @@
 name: Hourly WoW Market Collector
 
 on:
-  schedule:
-    - cron: '0 * * * *'
+  # 정기 수집 종료 (포트폴리오 정리). 비공개 저장소의 Actions 는 무료 한도가
+  # 월 2,000분이라, 이 스케줄을 남긴 채 비공개로 전환하면 한도를 초과한다.
+  # 필요하면 workflow_dispatch 로 수동 실행한다.
   workflow_dispatch:
 
 jobs:
